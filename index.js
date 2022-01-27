@@ -1,10 +1,27 @@
+
+/**
+ * For use with parseAddress functions
+ */
+ const statesWithTwoNames = [
+	'New Hampshire',
+	'New Mexico',
+	'New York',
+	'North Carolina',
+	'North Dakota',
+	'Rhode Island',
+	'South Carolina',
+	'South Dakota',
+	'West Virginia'
+];
+
+
 /**
  * This will return true if the name contains words that indicate it is a business.
  * 
  * @param name string Name of thing to check for business
  * @returns boolean
  */
- export function isBusinessCheck(name) {
+ function isBusinessCheck(name) {
     if (name.toLocaleLowerCase().includes('trust')
     || name.toLocaleLowerCase().includes('llc')
     || name.toLocaleLowerCase().includes('inc')
@@ -35,7 +52,7 @@
         return true;
     }
     else {
-        false;
+        return false;
     }
 }
 
@@ -45,7 +62,7 @@
  * @param {number} ms 
  * @returns 
  */
-export function timeout(ms) {
+function timeout(ms) {
     return new Promise((res) => setTimeout(res, ms));
 }
 
@@ -55,10 +72,10 @@ export function timeout(ms) {
  * 
  * @param {puppeteer.Page} page 
  */
-export async function saveBandwidth(page) {
+async function saveBandwidth(page) {
 	await page.setRequestInterception(true);
 	page.on('request', async req => {
-		// Let's not download images, stylesheets, or huge a datatable bundle
+		// Let's not download images or stylesheets
 		if (req.resourceType() === 'image'
 			|| req.resourceType() === 'stylesheet'
 		) {
@@ -68,6 +85,25 @@ export async function saveBandwidth(page) {
 			await req.continue();
 		}
 	});
+}
+
+/**
+ * Take screenshot with Puppeteer and store it in s3
+ * When using Puppeteer on AWS Lambda
+ * 
+ * @param {puppeteer.Page} page 
+ */
+ async function takeScreenshot(page) {
+	const fileName = `${new Date()}.png`;
+	const screenshot = await page.screenshot();
+
+	const s3Params = {
+		Bucket: 'failed-scripts',
+		Key: `${fileName}`,
+		Body: screenshot
+	};
+
+	await s3.putObject(s3Params).promise();
 }
 
 /**
@@ -81,7 +117,7 @@ export async function saveBandwidth(page) {
  * @param address 
  * @returns 
  */
- export function parseAddressBrNewLine(address) {
+ function parseAddressBrNewLine(address) {
 	const formattedAddress = {
 		street: '',
 		city: '',
@@ -98,13 +134,13 @@ export async function saveBandwidth(page) {
 			// This handles states with TwoNames putting the state in the proper location to find and not adding it to the city.
 			const checkState = statesWithTwoNames.find(state => address.toLocaleUpperCase().includes(state?.toLocaleUpperCase()));
 			if (checkState) {
-				parsedAddress = parsedAddress.replace(checkState, abbreviateState(checkState));
+				parsedAddress = parsedAddress.replace(checkState, checkState);
 			}
 
 			// Handles if state and zip are split up by <br>
 			if (parsedAddress.split('<br>').filter(Boolean).length > 3) {
 				const stateZip = parsedAddress.split('<br>').filter(Boolean).splice(parsedAddress.split('<br>').filter(Boolean).length - 2);
-				formattedAddress.state = abbreviateState(stateZip[0].trim());
+				formattedAddress.state = stateZip[0].trim();
 				formattedAddress.zip = stateZip[1];
 				const re = new RegExp(stateZip.join('|'), 'g');
 				parsedAddress = parsedAddress.replace(re, '').replace('<br><br>', '');
@@ -126,7 +162,7 @@ export async function saveBandwidth(page) {
 			// If the state is already set above we just need the city.
 			if (!formattedAddress.state) {
 				formattedAddress.city = cityStateZipSplit?.slice(0, cityStateZipSplit.length - 2)?.join(' ');
-				formattedAddress.state = abbreviateState(cityStateZipSplit[cityStateZipSplit.length - 2]);
+				formattedAddress.state = cityStateZipSplit[cityStateZipSplit.length - 2];
 				formattedAddress.zip = cityStateZipSplit[cityStateZipSplit.length - 1];
 			}
 			else {
@@ -159,7 +195,7 @@ export async function saveBandwidth(page) {
 * @param address 
 * @returns 
 */
-export function parseAddressComma(address) {
+function parseAddressComma(address) {
 	const formattedAddress = {
 		street: '',
 		city: '',
@@ -221,23 +257,4 @@ export function parseAddressComma(address) {
 	}
 
 	return formattedAddress;
-}
-
-/**
- * Take screenshot with Puppeteer and store it in s3
- * When using Puppeteer on AWS Lambda * 
- * 
- * @param {puppeteer.Page} page 
- */
-export async function takeScreenshot(page) {
-	const fileName = `${new Date()}.png`;
-	const screenshot = await page.screenshot();
-
-	const s3Params = {
-		Bucket: 'failed-scripts',
-		Key: `${fileName}`,
-		Body: screenshot
-	};
-
-	await s3.putObject(s3Params).promise();
 }
